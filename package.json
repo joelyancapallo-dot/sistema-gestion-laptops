@@ -1,0 +1,23 @@
+{
+  "name": "sistema-gestion-laptops",
+  "version": "1.0.0",
+  "description": "Sistema Web de Gestión Comercial, Comisiones Retroactivas y Control de Rentabilidad",
+  "main": "server/server.js",
+  "scripts": {
+    "start": "node server/server.js",
+    "init-db": "node server/initDb.js",
+    "clean-db": "node server/cleanDatabase.js",
+    "build:client": "npm --prefix client run build",
+    "install:all": "npm install && npm --prefix client install",
+    "dev": "node server/server.js"
+  },
+  "dependencies": {
+    "bcryptjs": "^2.4.3",
+    "cors": "^2.8.5",
+    "dotenv": "^16.4.7",
+    "express": "^4.21.2",
+    "jsonwebtoken": "^9.0.2",
+    "multer": "^2.5.0",
+    "pg": "^8.13.1"
+  }
+}
