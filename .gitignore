@@ -38,4 +38,5 @@ Thumbs.db
 
 # Archivos temporales de pruebas locales
 test_db.js
+subir_a_github.bat
 *.tmp
