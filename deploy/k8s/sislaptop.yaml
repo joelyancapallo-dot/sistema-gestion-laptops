@@ -1,0 +1,318 @@
+# Sistema de laptops (LaptopPRO ERP) en el k3s del VPS de Khipu Quantum.
+#   https://sislaptop.khipuquantum.com → un solo pod con dos contenedores:
+#     - app:      Node/Express; sirve la API y la web compilada (puerto 5000)
+#     - postgres: la base del sistema, solo para este pod (127.0.0.1:5432)
+# Espacio propio («sislaptop»): de internet solo entra Traefik, a la app.
+#
+# Lo aplica «deploy/sislaptop.sh publicar». Los secretos (Secret «sislaptop»
+# y «harbor-pull») los carga «deploy/sislaptop.sh secretos»: no van en git.
+#
+# OJO: los discos son «local-path» con reclaimPolicy Delete. Borrar un PVC
+# (o el espacio entero) BORRA los datos. Las copias diarias (CronJob de abajo)
+# se bajan a la PC con «deploy/sislaptop.sh bajar-copia».
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: sislaptop
+---
+# A la app solo le habla Traefik (internet) y, a la base, la copia diaria.
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: solo-traefik-y-copias
+  namespace: sislaptop
+spec:
+  podSelector:
+    matchLabels: { app: sislaptop }
+  policyTypes: [Ingress]
+  ingress:
+    - from:
+        - namespaceSelector:
+            matchLabels: { kubernetes.io/metadata.name: kube-system }
+      ports:
+        - port: 5000
+    - from:
+        - podSelector:
+            matchLabels: { rol: copia }
+      ports:
+        - port: 5432
+---
+# Los pods con los que cert-manager demuestra el dominio a Let's Encrypt
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: certificados-desde-traefik
+  namespace: sislaptop
+spec:
+  podSelector:
+    matchLabels: { acme.cert-manager.io/http01-solver: "true" }
+  policyTypes: [Ingress]
+  ingress:
+    - from:
+        - namespaceSelector:
+            matchLabels: { kubernetes.io/metadata.name: kube-system }
+---
+# http:// → https://
+apiVersion: traefik.io/v1alpha1
+kind: Middleware
+metadata:
+  name: a-https
+  namespace: sislaptop
+spec:
+  redirectScheme:
+    scheme: https
+    permanent: true
+---
+# Discos. local-path no limita el tamaño: el número es orientativo.
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: sislaptop-base
+  namespace: sislaptop
+spec:
+  accessModes: [ReadWriteOnce]
+  resources:
+    requests: { storage: 5Gi }
+---
+# Las fotos de las laptops (server/uploads/laptops)
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: sislaptop-fotos
+  namespace: sislaptop
+spec:
+  accessModes: [ReadWriteOnce]
+  resources:
+    requests: { storage: 10Gi }
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: sislaptop-copias
+  namespace: sislaptop
+spec:
+  accessModes: [ReadWriteOnce]
+  resources:
+    requests: { storage: 5Gi }
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: sislaptop
+  namespace: sislaptop
+spec:
+  replicas: 1
+  # Los discos son de un solo pod a la vez: el viejo se apaga antes de que
+  # arranque el nuevo (unos segundos sin servicio en cada publicación).
+  strategy: { type: Recreate }
+  selector:
+    matchLabels: { app: sislaptop }
+  template:
+    metadata:
+      labels: { app: sislaptop }
+    spec:
+      imagePullSecrets: [{ name: harbor-pull }]
+      automountServiceAccountToken: false
+      enableServiceLinks: false
+      # La base se apaga con calma (la app se detiene primero)
+      terminationGracePeriodSeconds: 60
+      initContainers:
+        # PostgreSQL como contenedor de apoyo: arranca antes que la app, sigue
+        # corriendo a su lado y se apaga después de ella. La app no empieza
+        # hasta que la base responde (startupProbe).
+        - name: postgres
+          image: postgres:16-alpine
+          restartPolicy: Always
+          args: ["-c", "shared_buffers=64MB", "-c", "max_connections=50",
+                 "-c", "timezone=America/Lima"]
+          env:
+            - { name: PGDATA, value: /var/lib/postgresql/data/pgdata }
+            - { name: POSTGRES_USER, value: sislaptop }
+            - { name: POSTGRES_DB, value: tienda_laptops }
+            # Solo se usa al crear la base por primera vez: cambiarla luego en
+            # el Secret NO cambia la de la base (sislaptop.sh secretos lo evita).
+            - name: POSTGRES_PASSWORD
+              valueFrom:
+                secretKeyRef: { name: sislaptop, key: DB_PASSWORD }
+            - { name: TZ, value: America/Lima }
+          ports:
+            - containerPort: 5432
+          startupProbe:
+            exec: { command: ["pg_isready", "-h", "127.0.0.1", "-U", "sislaptop", "-d", "tienda_laptops"] }
+            periodSeconds: 2
+            failureThreshold: 90
+          readinessProbe:
+            exec: { command: ["pg_isready", "-h", "127.0.0.1", "-U", "sislaptop", "-d", "tienda_laptops"] }
+            periodSeconds: 10
+          # CPU: en el VPS los proyectos ya reservan casi los 4 núcleos (aunque
+          # usan ~15 %). Se reserva lo mínimo; sin límite, puede usar más.
+          resources:
+            requests: { cpu: 10m, memory: 128Mi }
+            limits: { memory: 512Mi }
+          volumeMounts:
+            - { name: base, mountPath: /var/lib/postgresql/data }
+            # Solo para bajar las copias a la PC (sislaptop.sh bajar-copia)
+            - { name: copias, mountPath: /copias, readOnly: true }
+      containers:
+        - name: app
+          image: registry.khipuquantum.com/sislaptop/sislaptop:1.0.0
+          ports:
+            - containerPort: 5000
+          env:
+            - { name: NODE_ENV, value: production }
+            - { name: TZ, value: America/Lima }
+            - { name: PORT, value: "5000" }
+            - { name: DB_HOST, value: 127.0.0.1 }
+            - { name: DB_PORT, value: "5432" }
+            - { name: DB_USER, value: sislaptop }
+            - { name: DB_NAME, value: tienda_laptops }
+            - name: DB_PASSWORD
+              valueFrom:
+                secretKeyRef: { name: sislaptop, key: DB_PASSWORD }
+            - name: JWT_SECRET
+              valueFrom:
+                secretKeyRef: { name: sislaptop, key: JWT_SECRET }
+          # El servidor ejecuta initDb() (crea lo que falte, no borra nada) y
+          # recién entonces escucha: si /api/health responde, la base está lista.
+          readinessProbe:
+            httpGet: { path: /api/health, port: 5000 }
+            periodSeconds: 10
+          livenessProbe:
+            httpGet: { path: /api/health, port: 5000 }
+            initialDelaySeconds: 30
+            periodSeconds: 30
+          securityContext:
+            runAsNonRoot: true
+            runAsUser: 1000     # usuario «node» de la imagen
+            runAsGroup: 1000
+            allowPrivilegeEscalation: false
+            # Si el servidor escribe en otra carpeta, fallará con EROFS: hay que
+            # darle un volumen a esa carpeta (como /tmp) o quitar esta línea.
+            readOnlyRootFilesystem: true
+            capabilities: { drop: ["ALL"] }
+          resources:
+            requests: { cpu: 10m, memory: 96Mi }
+            limits: { memory: 384Mi }
+          volumeMounts:
+            - { name: fotos, mountPath: /app/server/uploads/laptops }
+            - { name: tmp, mountPath: /tmp }
+      volumes:
+        - name: base
+          persistentVolumeClaim: { claimName: sislaptop-base }
+        - name: fotos
+          persistentVolumeClaim: { claimName: sislaptop-fotos }
+        - name: copias
+          persistentVolumeClaim: { claimName: sislaptop-copias }
+        - name: tmp
+          emptyDir: { sizeLimit: 256Mi }
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: sislaptop
+  namespace: sislaptop
+spec:
+  selector: { app: sislaptop }
+  ports:
+    - { name: web, port: 5000 }
+    # Solo la usa la copia diaria (la NetworkPolicy no deja entrar a nadie más)
+    - { name: base, port: 5432 }
+---
+# https://sislaptop.khipuquantum.com → la app. El certificado lo pide y
+# renueva cert-manager cuando el DNS apunta al VPS.
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: sislaptop
+  namespace: sislaptop
+  annotations:
+    cert-manager.io/cluster-issuer: letsencrypt-prod
+    traefik.ingress.kubernetes.io/router.middlewares: sislaptop-a-https@kubernetescrd
+spec:
+  ingressClassName: traefik
+  tls:
+    - hosts: [sislaptop.khipuquantum.com]
+      secretName: sislaptop-tls
+  rules:
+    - host: sislaptop.khipuquantum.com
+      http:
+        paths:
+          - path: /
+            pathType: Prefix
+            backend:
+              service: { name: sislaptop, port: { number: 5000 } }
+---
+# Copia diaria a las 3:30 a. m. (hora de Lima):
+#   - base-AAAA-MM-DD-HHMM.dump: la base entera (se guardan 14 días)
+#   - fotos.tar.gz: todas las fotos (solo la última, para no llenar el disco)
+# Quedan en el disco «sislaptop-copias»; bájalas con «sislaptop.sh bajar-copia».
+apiVersion: batch/v1
+kind: CronJob
+metadata:
+  name: copia-diaria
+  namespace: sislaptop
+spec:
+  schedule: "30 3 * * *"
+  timeZone: America/Lima
+  concurrencyPolicy: Forbid
+  successfulJobsHistoryLimit: 1
+  failedJobsHistoryLimit: 3
+  jobTemplate:
+    spec:
+      backoffLimit: 1
+      activeDeadlineSeconds: 1800
+      template:
+        metadata:
+          labels: { rol: copia }
+        spec:
+          restartPolicy: Never
+          automountServiceAccountToken: false
+          enableServiceLinks: false
+          securityContext:
+            runAsNonRoot: true
+            runAsUser: 70       # usuario «postgres» de la imagen alpine
+            runAsGroup: 70
+          containers:
+            - name: copia
+              image: postgres:16-alpine
+              env:
+                - { name: TZ, value: America/Lima }
+                - name: PGPASSWORD
+                  valueFrom:
+                    secretKeyRef: { name: sislaptop, key: DB_PASSWORD }
+              # «$$(» es «$(» escapado: Kubernetes no lo toma como variable suya
+              command:
+                - sh
+                - -c
+                - |
+                  set -eu
+                  rm -f /copias/*.tmp   # restos de una copia que falló
+                  # Un pod recién nacido tarda unos segundos en ser admitido por
+                  # las reglas de red (NetworkPolicy): se espera a que la base responda.
+                  n=0
+                  until pg_isready -q -h sislaptop -U sislaptop -d tienda_laptops; do
+                    n=$$((n+1)); [ "$n" -lt 60 ] || { echo "La base no responde"; exit 1; }
+                    sleep 2
+                  done
+                  f="/copias/base-$$(date +%Y-%m-%d-%H%M).dump"
+                  pg_dump -h sislaptop -U sislaptop -d tienda_laptops -Fc -f "$f.tmp"
+                  pg_restore -l "$f.tmp" > /dev/null   # que el volcado se pueda leer
+                  mv "$f.tmp" "$f"
+                  tar -C /fotos -czf /copias/fotos.tar.gz.tmp .
+                  mv /copias/fotos.tar.gz.tmp /copias/fotos.tar.gz
+                  find /copias -name 'base-*.dump' -mtime +14 -delete
+                  ls -lh /copias
+              securityContext:
+                allowPrivilegeEscalation: false
+                capabilities: { drop: ["ALL"] }
+              resources:
+                requests: { cpu: 5m, memory: 32Mi }
+                limits: { memory: 256Mi }
+              volumeMounts:
+                - { name: fotos, mountPath: /fotos, readOnly: true }
+                - { name: copias, mountPath: /copias }
+          volumes:
+            - name: fotos
+              persistentVolumeClaim: { claimName: sislaptop-fotos }
+            - name: copias
+              persistentVolumeClaim: { claimName: sislaptop-copias }

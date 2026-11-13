@@ -1,0 +1,2 @@
+# Los scripts de Git Bash necesitan saltos de línea LF
+*.sh text eol=lf

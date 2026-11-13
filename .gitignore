@@ -40,3 +40,7 @@ Thumbs.db
 test_db.js
 subir_a_github.bat
 *.tmp
+
+# Despliegue: secretos y copias bajadas del VPS
+deploy/secretos/
+copias-sislaptop/

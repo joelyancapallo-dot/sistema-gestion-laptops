@@ -1,0 +1,18 @@
+# Lo que no entra en la imagen
+.git
+**/node_modules
+client/dist
+server/uploads/laptops/*
+# Borra todas las ventas y laptops: no debe existir en producción
+server/cleanDatabase.js
+subir_a_github.bat
+.env
+.env.*
+!.env.example
+deploy
+*.log
+*.bat
+*.ps1
+docker-compose.yml
+.vscode
+.idea
