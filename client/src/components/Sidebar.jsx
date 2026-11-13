@@ -11,6 +11,7 @@ import {
   FileText, 
   ShieldAlert,
   Sparkles,
+  Globe,
   X,
   LogOut
 } from 'lucide-react';
@@ -43,6 +44,7 @@ export default function Sidebar({
     // Operaciones
     { id: 'ventas', label: 'Registro de Ventas', icon: ShoppingCart },
     { id: 'catalogo', label: 'Catálogo de Laptops', icon: Laptop },
+    { id: 'catalogo-publico', label: 'Catálogo Público', icon: Globe },
     { id: 'ranking', label: 'Ranking Comercial', icon: Trophy },
 
     // Administración y Rentabilidad (Solo Admin)

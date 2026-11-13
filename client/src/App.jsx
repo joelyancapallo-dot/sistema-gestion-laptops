@@ -16,6 +16,8 @@ import { CommissionRulesView } from './views/CommissionRulesView';
 import { VendorsAdminView } from './views/VendorsAdminView';
 import { MonthlyReportView } from './views/MonthlyReportView';
 import { AuditView } from './views/AuditView';
+import PublicCatalogView from './views/PublicCatalogView';
+import PublicCatalogAdminView from './views/PublicCatalogAdminView';
 
 export function App() {
   // Token JWT y Usuario autenticado en sesión
@@ -58,6 +60,20 @@ export function App() {
 
   // Estado del menú lateral en dispositivos móviles
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
+  const [isPublicRoute, setIsPublicRoute] = useState(() => {
+    if (typeof window === 'undefined') return false;
+    const path = window.location.pathname.toLowerCase();
+    return path.startsWith('/catalogo') || path.startsWith('/catalog');
+  });
+
+  useEffect(() => {
+    const handlePopState = () => {
+      const path = window.location.pathname.toLowerCase();
+      setIsPublicRoute(path.startsWith('/catalogo') || path.startsWith('/catalog'));
+    };
+    window.addEventListener('popstate', handlePopState);
+    return () => window.removeEventListener('popstate', handlePopState);
+  }, []);
 
   // Estados de datos sincronizados con la Base de Datos PostgreSQL
   const [dashboardMetrics, setDashboardMetrics] = useState(null);
@@ -365,6 +381,18 @@ export function App() {
     ? 'mi-portal'
     : activeTab;
 
+  // 0. Si la ruta es el catálogo público (/catalogo o /catalog), servir de inmediato sin requerir login
+  if (isPublicRoute) {
+    return (
+      <PublicCatalogView 
+        onGoToLogin={() => {
+          window.history.pushState({}, '', '/');
+          setIsPublicRoute(false);
+        }} 
+      />
+    );
+  }
+
   // 1. Pantalla de carga inicial
   if (loadingInitial) {
     return (
@@ -480,6 +508,15 @@ export function App() {
                 currentUser={currentUser}
                 onSaveLaptop={handleSaveLaptop}
                 onDeleteLaptop={handleDeleteLaptop}
+                onRefresh={refreshAllData}
+              />
+            )}
+
+            {/* 4.1. Catálogo Público Web (Gestión y Enlaces para Vendedores y Admin) */}
+            {(effectiveTab === 'catalogo-publico' || effectiveTab === 'public-catalog') && (
+              <PublicCatalogAdminView
+                laptops={laptops}
+                currentUser={currentUser}
                 onRefresh={refreshAllData}
               />
             )}

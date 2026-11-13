@@ -9,6 +9,7 @@ const laptopRoutes = require('./routes/laptopRoutes');
 const salesRoutes = require('./routes/salesRoutes');
 const commissionRoutes = require('./routes/commissionRoutes');
 const reportRoutes = require('./routes/reportRoutes');
+const publicRoutes = require('./routes/publicRoutes');
 
 const app = express();
 const PORT = process.env.PORT || 5000;
@@ -23,7 +24,7 @@ app.use(express.json());
 const { authMiddleware, requireRole } = require('./middleware/authMiddleware');
 const RUTAS_PUBLICAS = new Set(['/auth/login', '/health']);
 app.use('/api', (req, res, next) =>
-  RUTAS_PUBLICAS.has(req.path.toLowerCase()) ? next() : authMiddleware(req, res, next)
+  (RUTAS_PUBLICAS.has(req.path.toLowerCase()) || req.path.toLowerCase().startsWith('/public')) ? next() : authMiddleware(req, res, next)
 );
 
 // Acciones solo del Administrador (el vendedor solo consulta; sus pantallas
@@ -35,6 +36,7 @@ app.post('/api/auth/vendors', soloAdmin);
 app.put('/api/auth/vendors/:id', soloAdmin);
 app.patch('/api/auth/vendors/:id/toggle-status', soloAdmin);
 app.post('/api/laptops', soloAdmin);
+app.patch('/api/laptops/:id/toggle-public', soloAdmin);
 app.delete('/api/laptops/:id', soloAdmin);
 app.put('/api/sales/:id/status', soloAdmin);
 app.patch('/api/sales/:id/status', soloAdmin);
@@ -46,6 +48,7 @@ app.get(['/api/reports/dashboard', '/api/reports/profitability', '/api/reports/m
 app.post('/api/reports/expenses', soloAdmin);
 
 // API Routes
+app.use('/api/public', publicRoutes);
 app.use('/api/auth', authRoutes);
 app.use('/api/laptops', laptopRoutes);
 app.use('/api/sales', salesRoutes);

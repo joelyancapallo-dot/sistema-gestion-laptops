@@ -85,6 +85,8 @@ async function initDb() {
     // 2.1. Asegurar columna foto_portada y tabla de fotografías
     await client.query(`
       ALTER TABLE laptops ADD COLUMN IF NOT EXISTS foto_portada VARCHAR(500);
+      ALTER TABLE laptops ADD COLUMN IF NOT EXISTS publicado BOOLEAN DEFAULT TRUE;
+      ALTER TABLE laptops ADD COLUMN IF NOT EXISTS descripcion_publica TEXT;
       
       CREATE TABLE IF NOT EXISTS laptop_imagenes (
         id SERIAL PRIMARY KEY,

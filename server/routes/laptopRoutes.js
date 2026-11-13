@@ -140,7 +140,7 @@ router.get('/', async (req, res) => {
       l.procesador, l.ram, l.almacenamiento, l.pantalla,
       l.precio_minimo, l.precio_sugerido, l.estado, l.created_at,
       l.responsable_id, l.fecha_asignacion_responsable,
-      l.foto_portada,
+      l.foto_portada, COALESCE(l.publicado, TRUE) as publicado,
       COALESCE(
         (
           SELECT json_agg(
@@ -862,6 +862,47 @@ router.delete('/:id', async (req, res) => {
   } catch (err) {
     console.error('Error eliminando laptop:', err);
     res.status(500).json({ error: 'Error al eliminar laptop.' });
+  }
+});
+
+// Activar o desactivar publicación de una laptop en el catálogo público (Solo Administrador)
+router.patch('/:id/toggle-public', async (req, res) => {
+  if (!checkAdminRole(req)) {
+    return res.status(403).json({
+      error: 'Permiso denegado. Solo el Administrador puede cambiar el estado de publicación.'
+    });
+  }
+
+  try {
+    const { id } = req.params;
+    const { publicado } = req.body;
+
+    let updateRes;
+    if (typeof publicado === 'boolean') {
+      updateRes = await db.query(
+        'UPDATE laptops SET publicado = $1, updated_at = CURRENT_TIMESTAMP WHERE id = $2 RETURNING id, marca, modelo, publicado;',
+        [publicado, id]
+      );
+    } else {
+      updateRes = await db.query(
+        'UPDATE laptops SET publicado = NOT COALESCE(publicado, TRUE), updated_at = CURRENT_TIMESTAMP WHERE id = $1 RETURNING id, marca, modelo, publicado;',
+        [id]
+      );
+    }
+
+    if (updateRes.rows.length === 0) {
+      return res.status(404).json({ error: 'Laptop no encontrada.' });
+    }
+
+    const item = updateRes.rows[0];
+    res.json({
+      success: true,
+      message: `Laptop ${item.marca} ${item.modelo} ${item.publicado ? 'publicada en' : 'ocultada del'} catálogo web.`,
+      laptop: item
+    });
+  } catch (err) {
+    console.error('Error al cambiar visibilidad pública de la laptop:', err);
+    res.status(500).json({ error: 'Error al cambiar publicación de laptop.' });
   }
 });
 

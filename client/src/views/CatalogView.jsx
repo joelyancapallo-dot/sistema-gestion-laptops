@@ -21,7 +21,10 @@ import {
   Camera,
   UploadCloud,
   Eye,
-  Star
+  Star,
+  ArrowUpDown,
+  SlidersHorizontal,
+  RotateCcw
 } from 'lucide-react';
 import { formatCurrency, formatDate } from '../utils/formatters';
 import ImageGalleryModal from '../components/ImageGalleryModal';
@@ -38,6 +41,7 @@ export default function CatalogView({
   const [selectedEstado, setSelectedEstado] = useState('en_stock');
   const [selectedCondicion, setSelectedCondicion] = useState('');
   const [selectedResponsable, setSelectedResponsable] = useState('');
+  const [sortBy, setSortBy] = useState('recientes');
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [editingLaptop, setEditingLaptop] = useState(null);
 
@@ -234,7 +238,7 @@ export default function CatalogView({
       procesador: laptop.procesador || '',
       ram: laptop.ram || '',
       almacenamiento: laptop.almacenamiento || '',
-      pantalla: laptop.pantalla || '',
+      pantalla: laptop.pantalla || '15.6" FHD',
       costo_adquisicion: laptop.costo_adquisicion || '',
       gastos_adquisicion: laptop.gastos_adquisicion || '15.00',
       precio_minimo: laptop.precio_minimo,
@@ -378,23 +382,62 @@ export default function CatalogView({
     }
   };
 
-  // Filtrado de laptops
-  const filteredLaptops = laptops.filter(l => {
-    const matchesSearch = 
-      (l.marca?.toLowerCase().includes(searchTerm.toLowerCase())) ||
-      (l.modelo?.toLowerCase().includes(searchTerm.toLowerCase())) ||
-      (l.numero_serie?.toLowerCase().includes(searchTerm.toLowerCase())) ||
-      (l.responsable_nombre?.toLowerCase().includes(searchTerm.toLowerCase())) ||
-      (l.reservado_por_nombre?.toLowerCase().includes(searchTerm.toLowerCase())) ||
-      (l.procesador?.toLowerCase().includes(searchTerm.toLowerCase()));
+  const hasActiveFilters = Boolean(
+    searchTerm || 
+    (selectedEstado && selectedEstado !== 'en_stock') || 
+    selectedCondicion || 
+    selectedResponsable || 
+    sortBy !== 'recientes'
+  );
 
-    const matchesEstado = !selectedEstado || 
-      (selectedEstado === 'en_stock' ? (l.estado === 'disponible' || l.estado === 'reservada') : l.estado === selectedEstado);
-    const matchesCondicion = !selectedCondicion || l.condicion === selectedCondicion;
-    const matchesResponsable = !selectedResponsable || String(l.responsable_id) === String(selectedResponsable);
+  const handleClearFilters = () => {
+    setSearchTerm('');
+    setSelectedEstado('en_stock');
+    setSelectedCondicion('');
+    setSelectedResponsable('');
+    setSortBy('recientes');
+  };
 
-    return matchesSearch && matchesEstado && matchesCondicion && matchesResponsable;
-  });
+  // Filtrado y ordenación de laptops
+  const filteredLaptops = laptops
+    .filter(l => {
+      const matchesSearch = 
+        (l.marca?.toLowerCase().includes(searchTerm.toLowerCase())) ||
+        (l.modelo?.toLowerCase().includes(searchTerm.toLowerCase())) ||
+        (l.numero_serie?.toLowerCase().includes(searchTerm.toLowerCase())) ||
+        (l.responsable_nombre?.toLowerCase().includes(searchTerm.toLowerCase())) ||
+        (l.reservado_por_nombre?.toLowerCase().includes(searchTerm.toLowerCase())) ||
+        (l.procesador?.toLowerCase().includes(searchTerm.toLowerCase()));
+
+      const matchesEstado = !selectedEstado || 
+        (selectedEstado === 'en_stock' ? (l.estado === 'disponible' || l.estado === 'reservada') : l.estado === selectedEstado);
+      const matchesCondicion = !selectedCondicion || l.condicion === selectedCondicion;
+      const matchesResponsable = !selectedResponsable || String(l.responsable_id) === String(selectedResponsable);
+
+      return matchesSearch && matchesEstado && matchesCondicion && matchesResponsable;
+    })
+    .sort((a, b) => {
+      const priceA = parseFloat(a.precio_sugerido || a.precio_minimo || 0);
+      const priceB = parseFloat(b.precio_sugerido || b.precio_minimo || 0);
+      const marcaA = (a.marca || '').toLowerCase();
+      const marcaB = (b.marca || '').toLowerCase();
+      const modeloA = (a.modelo || '').toLowerCase();
+      const modeloB = (b.modelo || '').toLowerCase();
+
+      switch (sortBy) {
+        case 'precio_asc':
+          return priceA - priceB;
+        case 'precio_desc':
+          return priceB - priceA;
+        case 'marca_asc':
+          return marcaA.localeCompare(marcaB, 'es') || modeloA.localeCompare(modeloB, 'es');
+        case 'marca_desc':
+          return marcaB.localeCompare(marcaA, 'es') || modeloB.localeCompare(modeloA, 'es');
+        case 'recientes':
+        default:
+          return (b.id || 0) - (a.id || 0);
+      }
+    });
 
   return (
     <div className="space-y-6">
@@ -426,58 +469,103 @@ export default function CatalogView({
         )}
       </div>
 
-      {/* Filtros */}
-      <div className="bg-white p-4 rounded-2xl border border-slate-200 shadow-sm grid grid-cols-1 sm:grid-cols-4 gap-3 text-xs">
-        <div className="relative col-span-1">
-          <Search className="w-4 h-4 text-slate-400 absolute left-3 top-2.5" />
-          <input 
-            type="text"
-            placeholder="Buscar marca, modelo, serie o responsable..."
-            value={searchTerm}
-            onChange={(e) => setSearchTerm(e.target.value)}
-            className="w-full pl-9 pr-3 py-2 bg-slate-50 border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500"
-          />
+      {/* Filtros y Ordenación */}
+      <div className="bg-white p-4 rounded-2xl border border-slate-200 shadow-sm space-y-3 text-xs">
+        <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-3">
+          {/* Buscador */}
+          <div className="relative sm:col-span-2 lg:col-span-2">
+            <Search className="w-4 h-4 text-slate-400 absolute left-3 top-2.5" />
+            <input 
+              type="text"
+              placeholder="Buscar marca, modelo, serie o custodia..."
+              value={searchTerm}
+              onChange={(e) => setSearchTerm(e.target.value)}
+              className="w-full pl-9 pr-3 py-2 bg-slate-50 border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500 font-medium"
+            />
+          </div>
+
+          {/* Ordenar por (Precio, Marca, Recientes) */}
+          <div>
+            <div className="relative">
+              <select 
+                value={sortBy} 
+                onChange={(e) => setSortBy(e.target.value)}
+                className="w-full py-2 pl-8 pr-3 bg-blue-50/60 border border-blue-200/80 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500 font-semibold text-blue-900 appearance-none cursor-pointer"
+              >
+                <option value="recientes">⏱️ Más Recientes</option>
+                <option value="precio_asc">💵 Precio: Menor a Mayor</option>
+                <option value="precio_desc">💵 Precio: Mayor a Menor</option>
+                <option value="marca_asc">🔤 Marca: A → Z</option>
+                <option value="marca_desc">🔤 Marca: Z → A</option>
+              </select>
+              <ArrowUpDown className="w-3.5 h-3.5 text-blue-600 absolute left-2.5 top-3 pointer-events-none" />
+            </div>
+          </div>
+
+          {/* Estado */}
+          <div>
+            <select 
+              value={selectedEstado} 
+              onChange={(e) => setSelectedEstado(e.target.value)}
+              className="w-full py-2 px-3 bg-slate-50 border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500 font-medium text-slate-700"
+            >
+              <option value="">Todos los Estados</option>
+              <option value="en_stock">En Stock (Disponibles y Reservadas)</option>
+              <option value="disponible">Solo Disponibles Libres</option>
+              <option value="reservada">Solo Reservadas (24h)</option>
+              <option value="vendida">Vendidas</option>
+            </select>
+          </div>
+
+          {/* Condición */}
+          <div>
+            <select 
+              value={selectedCondicion} 
+              onChange={(e) => setSelectedCondicion(e.target.value)}
+              className="w-full py-2 px-3 bg-slate-50 border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500 font-medium text-slate-700"
+            >
+              <option value="">Todas las Condiciones</option>
+              <option value="nueva">Nuevas</option>
+              <option value="seminueva">Seminuevas</option>
+            </select>
+          </div>
         </div>
 
-        <div>
-          <select 
-            value={selectedEstado} 
-            onChange={(e) => setSelectedEstado(e.target.value)}
-            className="w-full py-2 px-3 bg-slate-50 border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500 font-medium"
-          >
-            <option value="">Todos los Estados</option>
-            <option value="en_stock">En Stock (Disponibles y Reservadas)</option>
-            <option value="disponible">Solo Disponibles Libres</option>
-            <option value="reservada">Solo Reservadas (24h)</option>
-            <option value="vendida">Vendidas</option>
-          </select>
-        </div>
+        {/* Barra de Responsable y Resumen de Filtros */}
+        <div className="flex flex-wrap items-center justify-between gap-2 pt-1 border-t border-slate-100 text-xs">
+          <div className="flex items-center space-x-2">
+            <span className="text-slate-400 font-medium">Custodia física:</span>
+            <select 
+              value={selectedResponsable} 
+              onChange={(e) => setSelectedResponsable(e.target.value)}
+              className="py-1 px-2.5 bg-slate-50 border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 font-medium text-slate-700 text-xs"
+            >
+              <option value="">Todos los Responsables</option>
+              {vendors.map(v => (
+                <option key={v.id} value={v.id}>
+                  {v.nombre}
+                </option>
+              ))}
+            </select>
+          </div>
 
-        <div>
-          <select 
-            value={selectedCondicion} 
-            onChange={(e) => setSelectedCondicion(e.target.value)}
-            className="w-full py-2 px-3 bg-slate-50 border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500 font-medium"
-          >
-            <option value="">Todas las Condiciones</option>
-            <option value="nueva">Nuevas</option>
-            <option value="seminueva">Seminuevas</option>
-          </select>
-        </div>
+          <div className="flex items-center space-x-3 ml-auto">
+            <span className="text-slate-500 font-medium">
+              Mostrando <strong className="text-slate-800">{filteredLaptops.length}</strong> de <strong className="text-slate-800">{laptops.length}</strong> laptops
+            </span>
 
-        <div>
-          <select 
-            value={selectedResponsable} 
-            onChange={(e) => setSelectedResponsable(e.target.value)}
-            className="w-full py-2 px-3 bg-slate-50 border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500 font-medium"
-          >
-            <option value="">Todos los Responsables (Custodia)</option>
-            {vendors.map(v => (
-              <option key={v.id} value={v.id}>
-                A cargo de: {v.nombre}
-              </option>
-            ))}
-          </select>
+            {hasActiveFilters && (
+              <button
+                type="button"
+                onClick={handleClearFilters}
+                className="inline-flex items-center space-x-1 px-2.5 py-1 text-slate-600 hover:text-red-600 hover:bg-red-50 rounded-lg border border-slate-200 transition-colors"
+                title="Restablecer todos los filtros"
+              >
+                <RotateCcw className="w-3 h-3" />
+                <span>Restablecer</span>
+              </button>
+            )}
+          </div>
         </div>
       </div>
 
@@ -652,7 +740,7 @@ export default function CatalogView({
                     <div className="flex items-center justify-between text-[11px]">
                       <span>RAM: <strong>{l.ram || '8GB'}</strong></span>
                       <span>Disco: <strong>{l.almacenamiento || '256GB SSD'}</strong></span>
-                      <span>Pantalla: <strong>{l.pantalla || '14"'}</strong></span>
+                      <span>Pantalla: <strong>{l.pantalla || '15.6" FHD'}</strong></span>
                     </div>
                   </div>
 
@@ -837,19 +925,44 @@ export default function CatalogView({
                 </p>
               </div>
 
-              <div className="grid grid-cols-3 gap-2">
+              <div className="grid grid-cols-2 gap-3">
                 <div>
                   <label className="font-bold text-slate-700 block mb-1">Procesador</label>
                   <input 
                     type="text" 
-                    placeholder="i5-1135G7" 
+                    placeholder="i5-1135G7 / Ryzen 5" 
                     value={formData.procesador} 
                     onChange={(e) => setFormData({ ...formData, procesador: e.target.value })}
                     className="w-full p-2 border border-slate-300 rounded-xl"
                   />
                 </div>
                 <div>
-                  <label className="font-bold text-slate-700 block mb-1">RAM</label>
+                  <label className="font-bold text-slate-700 flex items-center justify-between mb-1">
+                    <span>Tamaño de Pantalla</span>
+                    <span className="text-[10px] text-blue-600 font-semibold">Predet: 15.6" FHD</span>
+                  </label>
+                  <input 
+                    type="text" 
+                    list="pantalla-sugerencias"
+                    placeholder='15.6" FHD' 
+                    value={formData.pantalla} 
+                    onChange={(e) => setFormData({ ...formData, pantalla: e.target.value })}
+                    className="w-full p-2 border border-slate-300 rounded-xl font-medium"
+                  />
+                  <datalist id="pantalla-sugerencias">
+                    <option value='15.6" FHD' />
+                    <option value='14.0" FHD' />
+                    <option value='15.6" HD' />
+                    <option value='14.0" HD' />
+                    <option value='16.0" WUXGA / 2K' />
+                    <option value='17.3" FHD' />
+                    <option value='13.3" FHD' />
+                    <option value='14.5" 2.5K' />
+                    <option value='15.6" 144Hz IPS' />
+                  </datalist>
+                </div>
+                <div>
+                  <label className="font-bold text-slate-700 block mb-1">Memoria RAM</label>
                   <input 
                     type="text" 
                     placeholder="16GB" 
@@ -859,7 +972,7 @@ export default function CatalogView({
                   />
                 </div>
                 <div>
-                  <label className="font-bold text-slate-700 block mb-1">Almacenamiento</label>
+                  <label className="font-bold text-slate-700 block mb-1">Almacenamiento (Disco)</label>
                   <input 
                     type="text" 
                     placeholder="512GB SSD" 
