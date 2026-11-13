@@ -15,7 +15,7 @@ import {
   Info,
   UserCheck
 } from 'lucide-react';
-import { formatCurrency, formatDate } from '../utils/formatters';
+import { formatCurrency, formatDate, getLocalDateString } from '../utils/formatters';
 import { exportToExcel } from '../utils/exportExcel';
 
 export default function SalesView({ 
@@ -46,7 +46,7 @@ export default function SalesView({
         vendedor_id: currentUser?.rol === 'vendedor' ? currentUser.id : (vendors[0]?.id || ''),
         precio_venta_final: '',
         metodo_pago: 'efectivo',
-        fecha_venta: new Date().toISOString().slice(0, 10),
+        fecha_venta: getLocalDateString(),
         estado: 'pagada',
         es_excepcion_precio: false,
         motivo_excepcion: '',
@@ -65,7 +65,7 @@ export default function SalesView({
     vendedor_id: currentUser?.rol === 'vendedor' ? currentUser.id : (vendors[0]?.id || ''),
     precio_venta_final: '',
     metodo_pago: 'efectivo',
-    fecha_venta: new Date().toISOString().slice(0, 10),
+    fecha_venta: getLocalDateString(),
     estado: 'pagada',
     es_excepcion_precio: false,
     motivo_excepcion: '',
@@ -147,7 +147,7 @@ export default function SalesView({
         vendedor_id: currentUser.rol === 'vendedor' ? currentUser.id : (vendors[0]?.id || ''),
         precio_venta_final: '',
         metodo_pago: 'efectivo',
-        fecha_venta: new Date().toISOString().slice(0, 10),
+        fecha_venta: getLocalDateString(),
         estado: 'pagada',
         es_excepcion_precio: false,
         motivo_excepcion: '',
@@ -190,7 +190,7 @@ export default function SalesView({
       };
     });
 
-    exportToExcel(exportData, `Ventas_Laptops_${new Date().toISOString().slice(0, 10)}`);
+    exportToExcel(exportData, `Ventas_Laptops_${getLocalDateString()}`);
   };
 
   return (
@@ -225,7 +225,7 @@ export default function SalesView({
                   vendedor_id: currentUser.rol === 'vendedor' ? currentUser.id : (vendors[0]?.id || ''),
                   precio_venta_final: '',
                   metodo_pago: 'efectivo',
-                  fecha_venta: new Date().toISOString().slice(0, 10),
+                  fecha_venta: getLocalDateString(),
                   estado: 'pagada',
                   es_excepcion_precio: false,
                   motivo_excepcion: '',

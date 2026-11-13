@@ -6,7 +6,15 @@ class SalesService {
    * Genera el siguiente código de venta: VTA-YYYYMM-0001
    */
   static async generateSaleCode(client, saleDate = new Date()) {
-    const yearMonth = saleDate.toISOString().slice(0, 7).replace('-', '');
+    let yearMonth;
+    if (typeof saleDate === 'string' && /^\d{4}-\d{2}/.test(saleDate)) {
+      yearMonth = saleDate.slice(0, 7).replace('-', '');
+    } else {
+      const d = saleDate instanceof Date ? saleDate : new Date(saleDate);
+      const y = d.getFullYear();
+      const m = String(d.getMonth() + 1).padStart(2, '0');
+      yearMonth = `${y}${m}`;
+    }
     const prefix = `VTA-${yearMonth}-`;
 
     const res = await client.query(`
@@ -49,8 +57,17 @@ class SalesService {
         notas = null
       } = data;
 
-      const saleDate = fecha_venta ? new Date(fecha_venta) : new Date();
-      const monthYear = saleDate.toISOString().slice(0, 7);
+      let finalFechaVenta = fecha_venta;
+      if (!finalFechaVenta || typeof finalFechaVenta !== 'string') {
+        const now = new Date();
+        const y = now.getFullYear();
+        const m = String(now.getMonth() + 1).padStart(2, '0');
+        const d = String(now.getDate()).padStart(2, '0');
+        finalFechaVenta = `${y}-${m}-${d}`;
+      } else {
+        finalFechaVenta = finalFechaVenta.slice(0, 10);
+      }
+      const monthYear = finalFechaVenta.slice(0, 7);
 
       // 1. Obtener y validar el equipo
       const laptopRes = await client.query(`
@@ -117,7 +134,7 @@ class SalesService {
       const gananciaBaseNegocio = Math.round((basePriceForProfit - costoTotalEquipo) * 100) / 100;
 
       // 4. Generar código de venta
-      const codigoVenta = await this.generateSaleCode(client, saleDate);
+      const codigoVenta = await this.generateSaleCode(client, finalFechaVenta);
 
       // 5. Insertar la venta
       const insertRes = await client.query(`
@@ -133,7 +150,7 @@ class SalesService {
         ) RETURNING *;
       `, [
         codigoVenta,
-        saleDate,
+        finalFechaVenta,
         vendedor_id,          // Vendedor que concreta la venta (recibe comisión y diferencia)
         laptop_id,
         responsableLaptopId,  // Vendedor que tenía la custodia física del equipo

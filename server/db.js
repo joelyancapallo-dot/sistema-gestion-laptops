@@ -1,5 +1,9 @@
 require('dotenv').config();
-const { Pool } = require('pg');
+const { Pool, types } = require('pg');
+
+// Parsear campos DATE de PostgreSQL (OID 1082) como strings directos 'YYYY-MM-DD'
+// para evitar que el driver pg cree un objeto Date en UTC y cause desfase de 1 día
+types.setTypeParser(1082, (val) => val);
 
 const pool = new Pool({
   host: process.env.DB_HOST || '127.0.0.1',

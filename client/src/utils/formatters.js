@@ -12,12 +12,38 @@ export function formatCurrency(amount) {
 }
 
 /**
- * Formatea una fecha ISO o string a formato legible en español
+ * Retorna la fecha local actual en formato YYYY-MM-DD según la zona horaria del dispositivo
+ * evitando que UTC altere el día (ej: después de las 7:00 PM en Perú UTC-5)
+ * @param {Date} d 
+ * @returns {string} Ej: "2026-11-13"
+ */
+export function getLocalDateString(d = new Date()) {
+  const year = d.getFullYear();
+  const month = String(d.getMonth() + 1).padStart(2, '0');
+  const day = String(d.getDate()).padStart(2, '0');
+  return `${year}-${month}-${day}`;
+}
+
+/**
+ * Formatea una fecha ISO o string a formato legible en español sin desfase de zona horaria
  * @param {string|Date} dateStr 
- * @returns {string} Ej: 03 Nov 2026
+ * @returns {string} Ej: 13 nov. 2026
  */
 export function formatDate(dateStr) {
   if (!dateStr) return '-';
+  // Si viene en formato YYYY-MM-DD o ISO que inicia con YYYY-MM-DD
+  if (typeof dateStr === 'string') {
+    const match = dateStr.match(/^(\d{4})-(\d{2})-(\d{2})/);
+    if (match) {
+      const [_, year, month, day] = match;
+      const d = new Date(parseInt(year, 10), parseInt(month, 10) - 1, parseInt(day, 10));
+      return d.toLocaleDateString('es-PE', {
+        day: '2-digit',
+        month: 'short',
+        year: 'numeric'
+      });
+    }
+  }
   const d = new Date(dateStr);
   if (isNaN(d.getTime())) return dateStr;
   return d.toLocaleDateString('es-PE', {

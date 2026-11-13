@@ -12,7 +12,7 @@ import {
   PieChart as PieIcon,
   HelpCircle
 } from 'lucide-react';
-import { formatCurrency, formatPercent, getMonthName, formatDate } from '../utils/formatters';
+import { formatCurrency, formatPercent, getMonthName, formatDate, getLocalDateString } from '../utils/formatters';
 
 export default function ProfitabilityView({ 
   profitData, 
@@ -26,7 +26,7 @@ export default function ProfitabilityView({
     concepto: '',
     categoria: 'alquiler',
     monto: '',
-    fecha: new Date().toISOString().slice(0, 10)
+    fecha: getLocalDateString()
   });
 
   if (!profitData) {
@@ -71,7 +71,7 @@ export default function ProfitabilityView({
         concepto: '',
         categoria: 'alquiler',
         monto: '',
-        fecha: new Date().toISOString().slice(0, 10)
+        fecha: getLocalDateString()
       });
       onRefresh();
     } catch (err) {
