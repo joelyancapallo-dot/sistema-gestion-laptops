@@ -26,8 +26,9 @@ router.get('/', async (req, res) => {
 // Registrar nueva venta (RESTRINGIDO EXCLUSIVAMENTE AL PERFIL DE ADMINISTRADOR)
 router.post('/', async (req, res) => {
   try {
-    const requestingUserId = req.body?.usuario_solicitante_id || req.headers['x-user-id'] || req.body?.usuario_id;
-    let userRole = req.headers['x-user-role'];
+    // Quién pide la venta: solo el usuario del token (no campos del navegador)
+    const requestingUserId = req.user.id;
+    let userRole = req.user.rol;
 
     const db = require('../db');
     if (requestingUserId) {
@@ -68,12 +69,7 @@ const handleStatusUpdate = async (req, res) => {
       return res.status(400).json({ error: 'El nuevo estado es requerido.' });
     }
 
-    const currentUser = req.body?.usuario_id 
-      ? { id: parseInt(req.body.usuario_id, 10), rol: req.body?.rol || 'admin' }
-      : (req.headers['x-user-role'] ? {
-          id: parseInt(req.headers['x-user-id'] || '1', 10),
-          rol: req.headers['x-user-role']
-        } : null);
+    const currentUser = { id: req.user.id, rol: req.user.rol };
 
     const result = await SalesService.updateSaleStatus(id, newStatus, reason, currentUser);
     res.json(result);
@@ -90,12 +86,7 @@ router.patch('/:id/status', handleStatusUpdate);
 router.delete('/:id', async (req, res) => {
   try {
     const { id } = req.params;
-    const currentUser = req.body?.usuario_id 
-      ? { id: parseInt(req.body.usuario_id, 10), rol: req.body?.rol || 'admin' }
-      : (req.headers['x-user-role'] ? {
-          id: parseInt(req.headers['x-user-id'] || '1', 10),
-          rol: req.headers['x-user-role']
-        } : null);
+    const currentUser = { id: req.user.id, rol: req.user.rol };
 
     const result = await SalesService.deleteSale(id, currentUser);
     res.json(result);

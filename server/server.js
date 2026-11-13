@@ -17,6 +17,34 @@ const PORT = process.env.PORT || 5000;
 app.use(cors());
 app.use(express.json());
 
+// Toda la API exige sesión (token JWT), salvo el login y la ruta de salud.
+// Va montado en '/api' para que Express compare las rutas igual que en los
+// routers de abajo (sin distinguir mayúsculas).
+const { authMiddleware, requireRole } = require('./middleware/authMiddleware');
+const RUTAS_PUBLICAS = new Set(['/auth/login', '/health']);
+app.use('/api', (req, res, next) =>
+  RUTAS_PUBLICAS.has(req.path.toLowerCase()) ? next() : authMiddleware(req, res, next)
+);
+
+// Acciones solo del Administrador (el vendedor solo consulta; sus pantallas
+// no usan estas rutas). Las demás rutas de admin ya lo comprueban dentro.
+const soloAdmin = requireRole('admin');
+app.post('/api/auth/register', soloAdmin);
+app.put('/api/auth/users/:id', soloAdmin);
+app.post('/api/auth/vendors', soloAdmin);
+app.put('/api/auth/vendors/:id', soloAdmin);
+app.patch('/api/auth/vendors/:id/toggle-status', soloAdmin);
+app.post('/api/laptops', soloAdmin);
+app.delete('/api/laptops/:id', soloAdmin);
+app.put('/api/sales/:id/status', soloAdmin);
+app.patch('/api/sales/:id/status', soloAdmin);
+app.delete('/api/sales/:id', soloAdmin);
+app.post('/api/commissions/rules', soloAdmin);
+app.post('/api/commissions/close-period', soloAdmin);
+app.get(['/api/reports/dashboard', '/api/reports/profitability', '/api/reports/monthly',
+  '/api/reports/expenses', '/api/reports/audit'], soloAdmin);
+app.post('/api/reports/expenses', soloAdmin);
+
 // API Routes
 app.use('/api/auth', authRoutes);
 app.use('/api/laptops', laptopRoutes);

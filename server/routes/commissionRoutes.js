@@ -50,7 +50,7 @@ router.post('/rules', async (req, res) => {
     await client.query(`
       INSERT INTO auditoria (usuario_id, accion, entidad, detalles_json)
       VALUES ($1, 'ACTUALIZAR_ESCALA_COMISIONES', 'reglas_comision', $2);
-    `, [req.body.usuario_id || 1, JSON.stringify(tiers)]);
+    `, [req.user.id, JSON.stringify(tiers)]);
 
     await client.query('COMMIT');
 
@@ -70,6 +70,11 @@ router.get('/vendor/:vendorId', async (req, res) => {
   try {
     const { vendorId } = req.params;
     const { monthYear } = req.query;
+
+    // Un vendedor solo ve sus propias comisiones; el admin, las de todos
+    if (req.user.rol !== 'admin' && String(req.user.id) !== String(vendorId)) {
+      return res.status(403).json({ error: 'Solo puedes consultar tus propias comisiones.' });
+    }
 
     const vendorRes = await db.query('SELECT id, nombre, email, telefono FROM usuarios WHERE id = $1', [vendorId]);
     if (vendorRes.rows.length === 0) {
@@ -92,7 +97,8 @@ router.post('/close-period', async (req, res) => {
   const client = await db.pool.connect();
   try {
     await client.query('BEGIN');
-    const { monthYear, cerrado_por } = req.body;
+    const { monthYear } = req.body;
+    const cerrado_por = req.user.id; // quien cierra: el usuario del token
     const targetMonth = monthYear || new Date().toISOString().slice(0, 7);
 
     // Verificar si ya está cerrado

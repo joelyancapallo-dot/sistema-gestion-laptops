@@ -72,7 +72,8 @@ router.get('/expenses', async (req, res) => {
 
 router.post('/expenses', async (req, res) => {
   try {
-    const { fecha, concepto, categoria, monto, registrado_por } = req.body;
+    const { fecha, concepto, categoria, monto } = req.body;
+    const registrado_por = req.user.id; // quien registra: el usuario del token
     if (!concepto || !categoria || !monto) {
       return res.status(400).json({ error: 'Concepto, categoría y monto son obligatorios.' });
     }

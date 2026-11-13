@@ -49,7 +49,6 @@ function checkAdminRole(req) {
     } catch (_) {}
   }
   if (req.user?.rol === 'admin') return true;
-  if (req.headers['x-user-role'] === 'admin') return true;
   return false;
 }
 
@@ -340,7 +339,7 @@ router.post('/', async (req, res) => {
       INSERT INTO auditoria (usuario_id, accion, entidad, entidad_id, detalles_json)
       VALUES ($1, 'REGISTRAR_LAPTOP', 'laptops', $2, $3);
     `, [
-      usuario_id || null,
+      req.user.id,
       newLaptop.id,
       JSON.stringify({
         laptop: `${newLaptop.marca} ${newLaptop.modelo} (${newLaptop.numero_serie})`,
@@ -583,8 +582,8 @@ router.put('/:id/transferir', async (req, res) => {
     const { nuevo_responsable_id, motivo, usuario_id } = req.body;
 
     // Control de acceso RBAC: Solo administrador puede transferir custodia
-    const reqUserId = usuario_id || req.headers['x-user-id'];
-    let isAdmin = req.headers['x-user-role'] === 'admin';
+    const reqUserId = req.user.id;
+    let isAdmin = req.user.rol === 'admin';
     if (!isAdmin && reqUserId) {
       const uRes = await db.query('SELECT rol FROM usuarios WHERE id = $1', [reqUserId]);
       if (uRes.rows.length > 0 && uRes.rows[0].rol === 'admin') {
@@ -657,9 +656,9 @@ router.put('/:id/transferir', async (req, res) => {
 router.post('/:id/reservar', async (req, res) => {
   try {
     const { id } = req.params;
-    const { cliente_nombre, notas, usuario_id } = req.body;
+    const { cliente_nombre, notas } = req.body;
 
-    const reqUserId = usuario_id || req.headers['x-user-id'];
+    const reqUserId = req.user.id;
     if (!reqUserId) {
       return res.status(400).json({ error: 'Se requiere identificar al vendedor que realiza la reserva.' });
     }
@@ -766,8 +765,8 @@ router.post('/:id/reservar', async (req, res) => {
 router.post('/:id/cancelar-reserva', async (req, res) => {
   try {
     const { id } = req.params;
-    const { usuario_id, motivo } = req.body;
-    const reqUserId = usuario_id || req.headers['x-user-id'];
+    const { motivo } = req.body;
+    const reqUserId = req.user.id;
 
     const laptopRes = await db.query(`
       SELECT l.*, u_res.nombre as reservado_por_nombre
@@ -796,7 +795,7 @@ router.post('/:id/cancelar-reserva', async (req, res) => {
         }
       }
     }
-    if (req.headers['x-user-role'] === 'admin') {
+    if (req.user.rol === 'admin') {
       canCancel = true;
     }
 
