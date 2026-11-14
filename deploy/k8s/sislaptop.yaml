@@ -155,7 +155,7 @@ spec:
             - { name: copias, mountPath: /copias, readOnly: true }
       containers:
         - name: app
-          image: registry.khipuquantum.com/sislaptop/sislaptop:1.0.0
+          image: registry.khipuquantum.com/sislaptop/sislaptop:1.1.0
           ports:
             - containerPort: 5000
           env:
