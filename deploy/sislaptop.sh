@@ -101,6 +101,17 @@ publicar() {
   info "Subiendo a Harbor"
   docker push "$IMAGEN:$v"
 
+  # Copia de la base y las fotos justo antes de tocar nada: si la versión
+  # nueva daña algo, se vuelve con «volver» y se restaura esta copia.
+  if kube -n "$NS" get deploy/sislaptop >/dev/null 2>&1; then
+    if [[ "${SIN_COPIA:-}" == si ]]; then
+      aviso "Publicando SIN copia previa (SIN_COPIA=si)."
+    else
+      info "Copia de seguridad previa"
+      copia_ahora || morir "La copia previa falló: no se publica. (Para saltarla a propósito: SIN_COPIA=si)"
+    fi
+  fi
+
   local antes; antes="$(version_actual)"
   poner_version "$v"
   info "Desplegando $antes → $v"
@@ -145,9 +156,10 @@ registro() {
 
 copia_ahora() {
   local job="copia-$(date +%Y%m%d-%H%M%S)"
-  kube -n "$NS" create job "$job" --from=cronjob/copia-diaria
-  kube -n "$NS" wait --for=condition=complete "job/$job" --timeout=900s
-  kube -n "$NS" logs "job/$job"
+  # Devuelve error si la copia no termina bien (lo usa «publicar»)
+  kube -n "$NS" create job "$job" --from=cronjob/copia-diaria || return 1
+  kube -n "$NS" wait --for=condition=complete "job/$job" --timeout=900s || return 1
+  kube -n "$NS" logs "job/$job" || aviso "No se pudo leer el registro de la copia (la copia sí terminó)."
 }
 
 bajar_copia() {
